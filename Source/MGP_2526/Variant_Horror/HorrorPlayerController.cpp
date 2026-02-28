@@ -1,26 +1,26 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 
-#include "MGP_2526PlayerController.h"
+#include "Variant_Horror/HorrorPlayerController.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
 #include "MGP_2526CameraManager.h"
-#include "Blueprint/UserWidget.h"
+#include "HorrorCharacter.h"
+#include "HorrorUI.h"
 #include "MGP_2526.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
-AMGP_2526PlayerController::AMGP_2526PlayerController()
+AHorrorPlayerController::AHorrorPlayerController()
 {
 	// set the player camera manager class
 	PlayerCameraManagerClass = AMGP_2526CameraManager::StaticClass();
 }
 
-void AMGP_2526PlayerController::BeginPlay()
+void AHorrorPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	
 	// only spawn touch controls on local player controllers
 	if (SVirtualJoystick::ShouldDisplayTouchInterface() && IsLocalPlayerController())
 	{
@@ -41,14 +41,37 @@ void AMGP_2526PlayerController::BeginPlay()
 	}
 }
 
-void AMGP_2526PlayerController::SetupInputComponent()
+void AHorrorPlayerController::OnPossess(APawn* aPawn)
+{
+	Super::OnPossess(aPawn);
+
+	// only spawn UI on local player controllers
+	if (IsLocalPlayerController())
+	{
+		// set up the UI for the character
+		if (AHorrorCharacter* HorrorCharacter = Cast<AHorrorCharacter>(aPawn))
+		{
+			// create the UI
+			if (!HorrorUI)
+			{
+				HorrorUI = CreateWidget<UHorrorUI>(this, HorrorUIClass);
+				HorrorUI->AddToViewport(0);
+			}
+
+			HorrorUI->SetupCharacter(HorrorCharacter);
+		}
+	}
+	
+}
+
+void AHorrorPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
-
+	
 	// only add IMCs for local player controllers
 	if (IsLocalPlayerController())
 	{
-		// Add Input Mapping Context
+		// Add Input Mapping Contexts
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 		{
 			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
@@ -65,6 +88,5 @@ void AMGP_2526PlayerController::SetupInputComponent()
 				}
 			}
 		}
-	}
-	
+	}	
 }
