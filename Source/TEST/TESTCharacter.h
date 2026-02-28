@@ -89,7 +89,7 @@ protected:
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
 
-	void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps);
+	//void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps);
 	
 
 public:

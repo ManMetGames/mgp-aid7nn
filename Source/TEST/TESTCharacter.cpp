@@ -63,8 +63,8 @@ void ATESTCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &ATESTCharacter::LookInput);
 
 		//Grappling
-		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Triggered, this, &ATESTCharacter::GrapplePressed);
-		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Triggered, this, &ATESTCharacter::GrappleReleased);
+		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Started, this, &ATESTCharacter::GrapplePressed);
+		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Completed, this, &ATESTCharacter::GrappleReleased);
 	}
 	else
 	{
@@ -72,7 +72,7 @@ void ATESTCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	}
 }
 
-void ATESTCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps)
+void ATESTCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ATESTCharacter, bIsGrappling);
