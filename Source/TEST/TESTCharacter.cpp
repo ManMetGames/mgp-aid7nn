@@ -10,6 +10,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "TEST.h"
 #include <Net/UnrealNetwork.h>
+#include "Kismet/KismetMathLibrary.h"
 
 ATESTCharacter::ATESTCharacter()
 {
@@ -60,6 +61,10 @@ void ATESTCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 		// Looking/Aiming
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ATESTCharacter::LookInput);
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &ATESTCharacter::LookInput);
+
+		//Grappling
+		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Triggered, this, &ATESTCharacter::GrapplePressed);
+		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Triggered, this, &ATESTCharacter::GrappleReleased);
 	}
 	else
 	{
@@ -124,7 +129,116 @@ void ATESTCharacter::DoJumpStart()
 
 void ATESTCharacter::DoJumpEnd()
 {
-{
 	// pass StopJumping to the character
 	StopJumping();
+}
+
+void ATESTCharacter::TrySetGrappleLocal()
+{
+	UCameraComponent* Cam = GetFirstPersonCameraComponent();
+	FVector Start = Cam->GetComponentLocation();   //camera location
+	float TraceMaxDistance = 10000.0f;
+	FVector End = Start + Cam->GetForwardVector() * TraceMaxDistance;
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);   //added "this" so player doesnt hit self in trace
+
+	FHitResult OutHit;
+	if (GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params))
+	{
+		SetGrapplePointLocal(OutHit.ImpactPoint);   //pass impact point from OutHit to function   (as GrapplePoint)
+	} 
+
+}
+
+void ATESTCharacter::RegisterNewGrapplePoint(FVector GrapplePoint)
+{
+	if (IsGrapplePointValid(GrapplePoint))
+	{
+		CurrentGrapplePoint = GrapplePoint;
+		CurrentGrappleDistance = (GrapplePoint - GetActorLocation()).Length();  //
+		bIsGrappling = true;
+	}
+
+}
+
+void ATESTCharacter::SetGrapplePointLocal(FVector GrapplePoint)
+{
+	RegisterNewGrapplePoint(GrapplePoint);
+	SetGrapplePointServer(GrapplePoint);
+}
+
+void ATESTCharacter::SetGrapplePointServer(FVector GrapplePoint)
+{
+	RegisterNewGrapplePoint(GrapplePoint);
+}
+
+bool ATESTCharacter::IsGrapplePointValid(FVector GrapplePoint)
+{
+	//distance to grapple point greater than max distance  (CALLED WHEN STARTING GRAPPLE)
+	FVector GrappleDiff = GrapplePoint - GetActorLocation();  
+	if (GrappleDiff.Length() > MaxGrappleDistance) 
+	{
+		return false;
+	}
+	return true;
+}
+
+void ATESTCharacter::ApplyGrapple()
+{
+	if (!bIsGrappling)   //check if grappling
+	{
+		return;
+	}
+	FVector GrappleDiff = CurrentGrapplePoint - GetActorLocation();  //difference between actor location and grapple point
+
+	//if difference is less than current grapple distance, return, because there is slack on the rope.
+	if (GrappleDiff.Length() < CurrentGrappleDistance)
+	{
+		return;
+	}
+
+	FVector Vel = GetVelocity();
+	FVector NormalTowardsGrapplePoint = GrappleDiff.GetSafeNormal();
+	FVector VelNormal = Vel.GetSafeNormal();
+
+	float AngleBetweenVelocityAndGrapple = UKismetMathLibrary::DegAcos(VelNormal.Dot(NormalTowardsGrapplePoint));
+
+	//moving towards the grapple point. do nothing
+	if (AngleBetweenVelocityAndGrapple < 90)
+	{
+		return;
+	}
+
+	FVector NewVelo = UKismetMathLibrary::ProjectVectorOnToPlane(Vel, NormalTowardsGrapplePoint);
+	LaunchCharacter(NewVelo, true, true);  //override x,y,z values
+}
+
+void ATESTCharacter::StopGrappleLocal()
+{
+	bIsGrappling = false;
+	StopGrappleRemote();
+}
+
+void ATESTCharacter::GrapplePressed(const FInputActionValue& Input)
+{
+	TrySetGrappleLocal();
+}
+
+void ATESTCharacter::GrappleReleased(const FInputActionValue& Input)
+{
+	StopGrappleLocal();
+}
+
+void ATESTCharacter::StopGrappleRemote()
+{
+	bIsGrappling = false;
+}
+
+
+void ATESTCharacter::Tick(float DeltaSeconds)
+{
+	//everytime we grapple, it applies the forces to keep us in the air/falling
+	Super::Tick(DeltaSeconds);
+	ApplyGrapple();
 }

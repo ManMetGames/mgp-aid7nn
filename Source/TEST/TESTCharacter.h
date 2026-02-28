@@ -37,6 +37,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* JumpAction;
 
+	// Grapple Input Action
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* GrappleAction;
+
 	/** Move Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* MoveAction;
@@ -60,6 +64,8 @@ protected:
 	/** Called from Input Actions for looking input */
 	void LookInput(const FInputActionValue& Value);
 
+	virtual void Tick(float DeltaSeconds) override;
+
 	/** Handles aim inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoAim(float Yaw, float Pitch);
@@ -76,10 +82,14 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
 
+
+
 protected:
 
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
+
+	void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps);
 	
 
 public:
@@ -100,9 +110,9 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Replicated)
 	float CurrentGrappleDistance = 0.0f;   //max distance the grapple can go at current moment (pulls further if extends max grapple distance)
-
-	UPROPERTY(BlueprintReadOnly, EditAnywhere, Catagory = "Grapple")   //allows for quick adjustments
-		float MaxGrappleDistance = 4000.0f;   //max start grapple distance
+	 
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Grapple")  //allows for quick adjustments
+	float MaxGrappleDistance = 4000.0f;  //max start grapple distance
 
 	virtual void GetLifetimeReplicatedProps
 	(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -125,5 +135,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void StopGrappleRemote();
 
+	UFUNCTION()
+	void GrapplePressed(const FInputActionValue& Input);
+
+	UFUNCTION()
+	void GrappleReleased(const FInputActionValue& Input);
 };
 
