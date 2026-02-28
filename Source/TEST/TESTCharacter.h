@@ -114,5 +114,16 @@ public:
 	UFUNCTION(Server, Reliable)  //called and set grapplepoint on server
 	void SetGrapplePointServer(FVector GreapplePoint);
 
+	bool IsGrapplePointValid(FVector GrapplePoint);   //check if point is valid (prevention against cheaters) true/false
+
+	void RegisterNewGrapplePoint(FVector GrapplePoint);   
+
+	void ApplyGrapple(); //applies forces to player when they grapple
+
+	void StopGrappleLocal();
+
+	UFUNCTION(Server, Reliable)
+	void StopGrappleRemote();
+
 };
 
