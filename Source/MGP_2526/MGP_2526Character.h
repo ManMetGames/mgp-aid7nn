@@ -7,7 +7,8 @@
 #include "Logging/LogMacros.h"
 #include "MGP_2526Character.generated.h"
 
-class USpringArmComponent;
+class UInputComponent;
+class USkeletalMeshComponent;
 class UCameraComponent;
 class UInputAction;
 struct FInputActionValue;
@@ -15,82 +16,136 @@ struct FInputActionValue;
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 /**
- *  A simple player-controllable third person character
- *  Implements a controllable orbiting camera
+ *  A basic first person character
  */
 UCLASS(abstract)
 class AMGP_2526Character : public ACharacter
 {
 	GENERATED_BODY()
 
-	/** Camera boom positioning the camera behind the character */
+	/** Pawn mesh: first person view (arms; seen only by self) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
-	USpringArmComponent* CameraBoom;
+	USkeletalMeshComponent* FirstPersonMesh;
 
-	/** Follow camera */
+	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
-	UCameraComponent* FollowCamera;
-	
+	UCameraComponent* FirstPersonCameraComponent;
+
 protected:
 
 	/** Jump Input Action */
-	UPROPERTY(EditAnywhere, Category="Input")
+	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* JumpAction;
 
 	/** Move Input Action */
-	UPROPERTY(EditAnywhere, Category="Input")
+	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* MoveAction;
 
 	/** Look Input Action */
-	UPROPERTY(EditAnywhere, Category="Input")
-	UInputAction* LookAction;
+	UPROPERTY(EditAnywhere, Category ="Input")
+	class UInputAction* LookAction;
 
 	/** Mouse Look Input Action */
-	UPROPERTY(EditAnywhere, Category="Input")
-	UInputAction* MouseLookAction;
+	UPROPERTY(EditAnywhere, Category ="Input")
+	class UInputAction* MouseLookAction;
 
+	// Grapple Input Action
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
+	class UInputAction* GrappleAction;
+	
 public:
+	AMGP_2526Character();
 
-	/** Constructor */
-	AMGP_2526Character();	
+	//crosshair
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<class UUserWidget> CrosshairWidgetClass;
 
 protected:
 
-	/** Initialize input action bindings */
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	/** Called from Input Actions for movement input */
+	void MoveInput(const FInputActionValue& Value);
 
-protected:
+	/** Called from Input Actions for looking input */
+	void LookInput(const FInputActionValue& Value);
 
-	/** Called for movement input */
-	void Move(const FInputActionValue& Value);
-
-	/** Called for looking input */
-	void Look(const FInputActionValue& Value);
-
-public:
+	/** Handles aim inputs from either controls or UI interfaces */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoAim(float Yaw, float Pitch);
 
 	/** Handles move inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoMove(float Right, float Forward);
 
-	/** Handles look inputs from either controls or UI interfaces */
-	UFUNCTION(BlueprintCallable, Category="Input")
-	virtual void DoLook(float Yaw, float Pitch);
-
-	/** Handles jump pressed inputs from either controls or UI interfaces */
+	/** Handles jump start inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpStart();
 
-	/** Handles jump pressed inputs from either controls or UI interfaces */
+	/** Handles jump end inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
 
+	virtual void Tick(float DeltaSeconds) override;
+
+protected:
+
+	/** Set up input action bindings */
+	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
+	
+
 public:
 
-	/** Returns CameraBoom subobject **/
-	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
+	/** Returns the first person mesh **/
+	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }
 
-	/** Returns FollowCamera subobject **/
-	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+	/** Returns first person camera component **/
+	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
+
+public:
+
+	UPROPERTY(BlueprintReadOnly, Replicated)   //replicated, if called on server and changed, that change will be sent to all clients
+	bool bIsGrappling = false;
+
+	UPROPERTY(BlueprintReadOnly, Replicated)
+	FVector CurrentGrapplePoint = FVector(0, 0, 0);  //position in world in which player is grappling
+
+	UPROPERTY(BlueprintReadOnly, Replicated)
+	float CurrentGrappleDistance = 0.0f;   //max distance the grapple can go at current moment (pulls further if extends max grapple distance)
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Grapple")  //allows for quick adjustments
+	float MaxGrappleDistance = 4000.0f;  //max start grapple distance
+
+
+
+
+	virtual void GetLifetimeReplicatedProps
+	(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	void TrySetGrappleLocal();    //do trace and try set grapple point
+
+	void SetGrapplePointLocal(FVector GrapplePoint);  //set the grapple point locally
+
+	UFUNCTION(Server, Reliable)  //called and set grapplepoint on server
+	void SetGrapplePointServer(FVector GreapplePoint);
+
+	bool IsGrapplePointValid(FVector GrapplePoint);   //check if point is valid (prevention against cheaters) true/false
+
+	void RegisterNewGrapplePoint(FVector GrapplePoint);
+
+	void ApplyGrapple(); //applies forces to player when they grapple
+
+	void StopGrappleLocal();
+
+	UFUNCTION(Server, Reliable)
+	void StopGrappleRemote();
+
+	UFUNCTION()
+	void GrapplePressed(const FInputActionValue& Input);
+
+	UFUNCTION()
+	void GrappleReleased(const FInputActionValue& Input);
+
+
+	//crosshair
+	virtual void BeginPlay() override;
 };
 
