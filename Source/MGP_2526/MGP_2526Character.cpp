@@ -11,6 +11,7 @@
 #include "MGP_2526.h"
 #include <Net/UnrealNetwork.h>
 #include "Kismet/KismetMathLibrary.h"
+#include "Blueprint/UserWidget.h"
 
 AMGP_2526Character::AMGP_2526Character()
 {
@@ -132,6 +133,22 @@ void AMGP_2526Character::DoJumpEnd()
 	// pass StopJumping to the character
 	StopJumping();
 }
+
+
+void AMGP_2526Character::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (IsLocallyControlled() && CrosshairWidgetClass)
+	{
+		UUserWidget* Crosshair = CreateWidget<UUserWidget>(GetWorld(), CrosshairWidgetClass);
+		if (Crosshair)
+		{
+			Crosshair->AddToViewport();
+		}
+	}
+}
+
 
 
 //  *** GRAPPLE MECHANIC IMPLEMENTATION ***

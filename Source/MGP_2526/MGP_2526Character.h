@@ -56,6 +56,10 @@ protected:
 public:
 	AMGP_2526Character();
 
+	//crosshair
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<class UUserWidget> CrosshairWidgetClass;
+
 protected:
 
 	/** Called from Input Actions for movement input */
@@ -139,5 +143,9 @@ public:
 
 	UFUNCTION()
 	void GrappleReleased(const FInputActionValue& Input);
+
+
+	//crosshair
+	virtual void BeginPlay() override;
 };
 
