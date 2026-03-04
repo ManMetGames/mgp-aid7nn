@@ -232,6 +232,9 @@ void AMGP_2526Character::ApplyGrapple()
 	LaunchCharacter(NewVelo, true, true);  //override x,y,z values
 }
 
+
+
+
 void AMGP_2526Character::StopGrappleLocal()
 {
 	bIsGrappling = false;
