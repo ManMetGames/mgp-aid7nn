@@ -48,6 +48,10 @@ protected:
 	/** Mouse Look Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	class UInputAction* MouseLookAction;
+
+	// Grapple Input Action
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
+	class UInputAction* GrappleAction;
 	
 public:
 	AMGP_2526Character();
@@ -76,6 +80,8 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
 
+	virtual void Tick(float DeltaSeconds) override;
+
 protected:
 
 	/** Set up input action bindings */
@@ -90,5 +96,48 @@ public:
 	/** Returns first person camera component **/
 	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
 
+public:
+
+	UPROPERTY(BlueprintReadOnly, Replicated)   //replicated, if called on server and changed, that change will be sent to all clients
+	bool bIsGrappling = false;
+
+	UPROPERTY(BlueprintReadOnly, Replicated)
+	FVector CurrentGrapplePoint = FVector(0, 0, 0);  //position in world in which player is grappling
+
+	UPROPERTY(BlueprintReadOnly, Replicated)
+	float CurrentGrappleDistance = 0.0f;   //max distance the grapple can go at current moment (pulls further if extends max grapple distance)
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Grapple")  //allows for quick adjustments
+	float MaxGrappleDistance = 4000.0f;  //max start grapple distance
+
+
+
+
+	virtual void GetLifetimeReplicatedProps
+	(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	void TrySetGrappleLocal();    //do trace and try set grapple point
+
+	void SetGrapplePointLocal(FVector GrapplePoint);  //set the grapple point locally
+
+	UFUNCTION(Server, Reliable)  //called and set grapplepoint on server
+	void SetGrapplePointServer(FVector GreapplePoint);
+
+	bool IsGrapplePointValid(FVector GrapplePoint);   //check if point is valid (prevention against cheaters) true/false
+
+	void RegisterNewGrapplePoint(FVector GrapplePoint);
+
+	void ApplyGrapple(); //applies forces to player when they grapple
+
+	void StopGrappleLocal();
+
+	UFUNCTION(Server, Reliable)
+	void StopGrappleRemote();
+
+	UFUNCTION()
+	void GrapplePressed(const FInputActionValue& Input);
+
+	UFUNCTION()
+	void GrappleReleased(const FInputActionValue& Input);
 };
 

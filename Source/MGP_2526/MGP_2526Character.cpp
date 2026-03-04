@@ -9,6 +9,8 @@
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "MGP_2526.h"
+#include <Net/UnrealNetwork.h>
+#include "Kismet/KismetMathLibrary.h"
 
 AMGP_2526Character::AMGP_2526Character()
 {
@@ -59,11 +61,23 @@ void AMGP_2526Character::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 		// Looking/Aiming
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMGP_2526Character::LookInput);
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AMGP_2526Character::LookInput);
+
+		//Grappling
+		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Started, this, &AMGP_2526Character::GrapplePressed);
+		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Completed, this, &AMGP_2526Character::GrappleReleased);
 	}
 	else
 	{
 		UE_LOG(LogMGP_2526, Error, TEXT("'%s' Failed to find an Enhanced Input Component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
 	}
+}
+
+void AMGP_2526Character::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AMGP_2526Character, bIsGrappling);
+	DOREPLIFETIME(AMGP_2526Character, CurrentGrapplePoint);
+	DOREPLIFETIME(AMGP_2526Character, CurrentGrappleDistance);
 }
 
 
@@ -117,4 +131,115 @@ void AMGP_2526Character::DoJumpEnd()
 {
 	// pass StopJumping to the character
 	StopJumping();
+}
+
+
+//  *** GRAPPLE MECHANIC IMPLEMENTATION ***
+void AMGP_2526Character::TrySetGrappleLocal()
+{
+	UCameraComponent* Cam = GetFirstPersonCameraComponent();
+	FVector Start = Cam->GetComponentLocation();   //camera location
+	float TraceMaxDistance = 10000.0f;
+	FVector End = Start + Cam->GetForwardVector() * TraceMaxDistance;
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);   //added "this" so player doesnt hit self in trace
+
+	FHitResult OutHit;
+	if (GetWorld()->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params))
+	{
+		SetGrapplePointLocal(OutHit.ImpactPoint);   //pass impact point from OutHit to function   (as GrapplePoint)
+	}
+
+}
+void AMGP_2526Character::RegisterNewGrapplePoint(FVector GrapplePoint)
+{
+	if (IsGrapplePointValid(GrapplePoint))
+	{
+		CurrentGrapplePoint = GrapplePoint;
+		CurrentGrappleDistance = (GrapplePoint - GetActorLocation()).Length();  //
+		bIsGrappling = true;
+	}
+
+}
+
+void AMGP_2526Character::SetGrapplePointLocal(FVector GrapplePoint)
+{
+	RegisterNewGrapplePoint(GrapplePoint);
+	SetGrapplePointServer(GrapplePoint);
+}
+
+void AMGP_2526Character::SetGrapplePointServer_Implementation(FVector GrapplePoint)
+{
+	RegisterNewGrapplePoint(GrapplePoint);
+}
+
+bool AMGP_2526Character::IsGrapplePointValid(FVector GrapplePoint)
+{
+	//distance to grapple point greater than max distance  (CALLED WHEN STARTING GRAPPLE)
+	FVector GrappleDiff = GrapplePoint - GetActorLocation();
+	if (GrappleDiff.Length() > MaxGrappleDistance)
+	{
+		return false;
+	}
+	return true;
+}
+
+void AMGP_2526Character::ApplyGrapple()
+{
+	if (!bIsGrappling)   //check if grappling
+	{
+		return;
+	}
+	FVector GrappleDiff = CurrentGrapplePoint - GetActorLocation();  //difference between actor location and grapple point
+
+	//if difference is less than current grapple distance, return, because there is slack on the rope.
+	if (GrappleDiff.Length() < CurrentGrappleDistance)
+	{
+		return;
+	}
+
+	FVector Vel = GetVelocity();
+	FVector NormalTowardsGrapplePoint = GrappleDiff.GetSafeNormal();
+	FVector VelNormal = Vel.GetSafeNormal();
+
+	float AngleBetweenVelocityAndGrapple = UKismetMathLibrary::DegAcos(VelNormal.Dot(NormalTowardsGrapplePoint));
+
+	//moving towards the grapple point. do nothing
+	if (AngleBetweenVelocityAndGrapple < 90)
+	{
+		return;
+	}
+
+	FVector NewVelo = UKismetMathLibrary::ProjectVectorOnToPlane(Vel, NormalTowardsGrapplePoint);
+	LaunchCharacter(NewVelo, true, true);  //override x,y,z values
+}
+
+void AMGP_2526Character::StopGrappleLocal()
+{
+	bIsGrappling = false;
+	StopGrappleRemote();
+}
+
+void AMGP_2526Character::GrapplePressed(const FInputActionValue& Input)
+{
+	TrySetGrappleLocal();
+}
+
+void AMGP_2526Character::GrappleReleased(const FInputActionValue& Input)
+{
+	StopGrappleLocal();
+}
+
+void AMGP_2526Character::StopGrappleRemote_Implementation()
+{
+	bIsGrappling = false;
+}
+
+
+void AMGP_2526Character::Tick(float DeltaSeconds)
+{
+	//everytime we grapple, it applies the forces to keep us in the air/falling
+	Super::Tick(DeltaSeconds);
+	ApplyGrapple();
 }
