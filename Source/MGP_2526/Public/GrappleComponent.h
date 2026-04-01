@@ -33,18 +33,23 @@ private:
 	UCharacterMovementComponent* MovementComponent;
 
 	EGrappleState GrappleState = EGrappleState::Idle;
-
-	// World position of the grapple hook point
 	FVector GrapplePoint;
-	// Current rope length, set when the grapple first attaches
 	float RopeLength = 0.f;
 
-	// How far the grapple hook can reach
 	UPROPERTY(EditAnywhere, Category = "Grapple")
 	float MaxGrappleDistance = 3000.f;
 
-	// Fires a line trace and hooks onto whatever it hits
+	
+	float DefaultBrakingFrictionFactor;
+	float DefaultBrakingDeceleration;
+	float DefaultAirControl;
+
+	void StartGrapple();
+	void StopGrapple();
 	void AttachToSurface();
+	void ReleaseGrapple();
+	// Called every tick while attached - handles all swing physics
+	void UpdateSwing(float DeltaTime);
 
 public:
 	void Input_StartGrapple();
