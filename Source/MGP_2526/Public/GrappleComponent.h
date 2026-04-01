@@ -6,7 +6,6 @@
 class ACharacter;
 class UCharacterMovementComponent;
 
-// Tracks whether the grapple is idle or hooked onto something
 UENUM(BlueprintType)
 enum class EGrappleState : uint8
 {
@@ -30,21 +29,29 @@ protected:
 	) override;
 
 private:
-	// Cached references set up in BeginPlay
 	ACharacter* OwnerCharacter;
 	UCharacterMovementComponent* MovementComponent;
 
-	// Current state of the grapple
 	EGrappleState GrappleState = EGrappleState::Idle;
 
+	// World position of the grapple hook point
+	FVector GrapplePoint;
+	// Current rope length, set when the grapple first attaches
+	float RopeLength = 0.f;
+
+	// How far the grapple hook can reach
+	UPROPERTY(EditAnywhere, Category = "Grapple")
+	float MaxGrappleDistance = 3000.f;
+
+	// Fires a line trace and hooks onto whatever it hits
+	void AttachToSurface();
+
 public:
-	// Input entry points called from the character
 	void Input_StartGrapple();
 	void Input_StopGrapple();
 	void Input_StartReel();
 	void Input_StopReel();
 
-	// Forward input passed in from the character each frame
 	float ForwardInputValue = 0.f;
 	void SetForwardInput(float Value);
 };
