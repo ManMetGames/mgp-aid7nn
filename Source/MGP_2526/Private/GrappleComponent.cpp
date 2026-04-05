@@ -13,6 +13,7 @@ void UGrappleComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Cache the owning character and its movement component for later use
 	OwnerCharacter = Cast<ACharacter>(GetOwner());
 	if (OwnerCharacter)
 	{
@@ -42,6 +43,7 @@ void UGrappleComponent::AttachToSurface()
 {
 	if (!OwnerCharacter) return;
 
+	// Get the camera position and direction to fire the trace from
 	FVector Start;
 	FRotator Rotation;
 	OwnerCharacter->GetController()->GetPlayerViewPoint(Start, Rotation);
@@ -49,9 +51,11 @@ void UGrappleComponent::AttachToSurface()
 
 	FHitResult Hit;
 	FCollisionQueryParams Params;
-	Params.AddIgnoredActor(OwnerCharacter);
+	Params.AddIgnoredActor(OwnerCharacter); // ignore self so we don't hit our own capsule
 
 	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+
+	// Only attach if we hit a static world surface (not dynamic objects or pawns)
 	if (bHit && Hit.Component.IsValid() && Hit.Component->GetCollisionObjectType() == ECC_WorldStatic)
 	{
 		GrapplePoint = Hit.Location;
@@ -64,6 +68,7 @@ void UGrappleComponent::AttachToSurface()
 		MovementComponent->BrakingDecelerationFalling = 0.f;
 		MovementComponent->AirControl = 0.f;
 
+		// Draw a debug sphere at the hook point so we can see where it landed
 		DrawDebugSphere(GetWorld(), GrapplePoint, 20.f, 12, FColor::Green, false, 2.f);
 	}
 }
@@ -71,6 +76,7 @@ void UGrappleComponent::AttachToSurface()
 void UGrappleComponent::ReleaseGrapple()
 {
 	GrappleState = EGrappleState::Idle;
+	bIsReeling = false; // make sure reel state is cleared on release
 
 	if (!MovementComponent) return;
 
@@ -106,42 +112,28 @@ void UGrappleComponent::UpdateSwing(float DeltaTime)
 		if (NewRadial < 0.f) Velocity -= RopeDirection * NewRadial;
 	}
 
+	// 3. Shorten the rope and pull the player toward the anchor while reeling
+	if (bIsReeling)
+	{
+		RopeLength -= ReelSpeed * DeltaTime;
+		RopeLength = FMath::Max(RopeLength, MinRopeLength); // clamp to minimum rope length
+
+		FVector PullForce = RopeDirection * ReelSpeed * 2.f;
+		Velocity += PullForce * DeltaTime;
+	}
+
 	MovementComponent->Velocity = Velocity;
 
 	// Draw the rope as a red line each frame for debugging
 	DrawDebugLine(GetWorld(), OwnerCharacter->GetActorLocation(), GrapplePoint, FColor::Red, false, 0.f, 0, 2.f);
 }
 
-void UGrappleComponent::StartGrapple()
-{
-	AttachToSurface(); 
-}
+// These forward to internal functions so input bindings stay clean
+void UGrappleComponent::StartGrapple() { AttachToSurface(); }
+void UGrappleComponent::StopGrapple() { ReleaseGrapple(); }
 
-void UGrappleComponent::StopGrapple()
-{
-	ReleaseGrapple(); 
-}
-
-void UGrappleComponent::Input_StartGrapple()
-{ 
-	StartGrapple(); 
-}
-void UGrappleComponent::Input_StopGrapple()
-{
-	StopGrapple(); 
-}
-
-void UGrappleComponent::Input_StartReel() 
-{
-
-}
-
-void UGrappleComponent::Input_StopReel() 
-{
-	
-}
-
-void UGrappleComponent::SetForwardInput(float Value)
-{
-	ForwardInputValue = Value; 
-}
+void UGrappleComponent::Input_StartGrapple() { StartGrapple(); }
+void UGrappleComponent::Input_StopGrapple() { StopGrapple(); }
+void UGrappleComponent::Input_StartReel() { bIsReeling = true; }
+void UGrappleComponent::Input_StopReel() { bIsReeling = false; }
+void UGrappleComponent::SetForwardInput(float Value) { ForwardInputValue = Value; }
