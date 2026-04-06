@@ -122,6 +122,12 @@ void UGrappleComponent::UpdateSwing(float DeltaTime)
 		Velocity += PullForce * DeltaTime;
 	}
 
+	// 4. Apply swing force along the tangent direction based on player forward input
+	//    This lets the player actively pump the swing to gain speed
+	FVector PlayerForward = OwnerCharacter->GetActorForwardVector();
+	FVector TangentDirection = FVector::VectorPlaneProject(PlayerForward, RopeDirection).GetSafeNormal();
+	Velocity += TangentDirection * ForwardInputValue * SwingForce * DeltaTime;
+
 	MovementComponent->Velocity = Velocity;
 
 	// Draw the rope as a red line each frame for debugging

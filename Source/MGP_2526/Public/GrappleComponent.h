@@ -54,6 +54,10 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Grapple")
 	float MinRopeLength = 300.f;
 
+	// Force applied when the player pushes forward while swinging
+	UPROPERTY(EditAnywhere, Category = "Grapple")
+	float SwingForce = 600.f;
+
 	// Saved so we can restore them when the grapple is released
 	float DefaultBrakingFrictionFactor;
 	float DefaultBrakingDeceleration;
