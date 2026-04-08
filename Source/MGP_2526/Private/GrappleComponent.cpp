@@ -37,6 +37,26 @@ void UGrappleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 	{
 		UpdateSwing(DeltaTime);
 	}
+	else if (bPreserveMomentum && MovementComponent)
+	{
+		FVector Velocity = MovementComponent->Velocity;
+
+		// Gradually decay horizontal momentum each frame
+		float DecayFactor = 0.995f;
+		HorizontalMomentum *= DecayFactor;
+
+		// Override horizontal velocity with our preserved momentum
+		Velocity.X = HorizontalMomentum.X;
+		Velocity.Y = HorizontalMomentum.Y;
+
+		MovementComponent->Velocity = Velocity;
+
+		// Once momentum is negligible, stop overriding velocity
+		if (HorizontalMomentum.SizeSquared() < 1.f)
+		{
+			bPreserveMomentum = false;
+		}
+	}
 }
 
 void UGrappleComponent::AttachToSurface()
@@ -79,6 +99,10 @@ void UGrappleComponent::ReleaseGrapple()
 	bIsReeling = false; // make sure reel state is cleared on release
 
 	if (!MovementComponent) return;
+
+	// Store horizontal velocity so Tick can preserve it briefly after release
+	HorizontalMomentum = FVector(MovementComponent->Velocity.X, MovementComponent->Velocity.Y, 0.f);
+	bPreserveMomentum = true;
 
 	// Restore air control so the player can steer normally again
 	MovementComponent->AirControl = DefaultAirControl;

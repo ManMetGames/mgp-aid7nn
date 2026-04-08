@@ -76,6 +76,10 @@ private:
 	// Whether the player is currently holding the reel button
 	bool bIsReeling = false;
 
+	// Stores horizontal velocity after release so the player carries their speed
+	FVector HorizontalMomentum = FVector::ZeroVector;
+	bool bPreserveMomentum = false;
+
 public:
 	// Input entry points called from the character
 	void Input_StartGrapple();
