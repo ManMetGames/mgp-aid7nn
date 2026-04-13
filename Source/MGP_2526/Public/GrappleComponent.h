@@ -6,7 +6,7 @@
 class ACharacter;
 class UCharacterMovementComponent;
 
-// Tracks whether the grapple is idle or hooked onto something
+// Tracks whether the grapple is  hooked onto something
 UENUM(BlueprintType)
 enum class EGrappleState : uint8
 {
@@ -23,11 +23,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
-	virtual void TickComponent(
-		float DeltaTime,
-		ELevelTick TickType,
-		FActorComponentTickFunction* ThisTickFunction
-	) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
 	// Cached references set up in BeginPlay
@@ -37,16 +33,18 @@ private:
 	// Current state of the grapple
 	EGrappleState GrappleState = EGrappleState::Idle;
 
-	// World position of the grapple hook point
+	//World position of the grapple hook point
 	FVector GrapplePoint;
 	// Current rope length, set when the grapple first attaches
 	float RopeLength = 0.f;
 
+
+	//EDIT ANYWHERE properties to tweak grapple feel without changing code! ! !!!!!! 
 	// How far the grapple hook can reach
 	UPROPERTY(EditAnywhere, Category = "Grapple")
 	float MaxGrappleDistance = 3000.f;
 
-	// How fast the rope shortens when reeling
+	// How fast the rope shortens when reeling/.
 	UPROPERTY(EditAnywhere, Category = "Grapple")
 	float ReelSpeed = 1200.f;
 
@@ -57,6 +55,10 @@ private:
 	// Force applied when the player pushes forward while swinging
 	UPROPERTY(EditAnywhere, Category = "Grapple")
 	float SwingForce = 600.f;
+
+	// Small speed burst applied in the direction of travel on release
+	UPROPERTY(EditAnywhere, Category = "Grapple")
+	float HeroReleaseBoost = 250.f;
 
 	// Saved so we can restore them when the grapple is released
 	float DefaultBrakingFrictionFactor;

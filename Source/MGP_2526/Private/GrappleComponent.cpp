@@ -13,14 +13,13 @@ void UGrappleComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Cache the owning character and its movement component for later use
 	OwnerCharacter = Cast<ACharacter>(GetOwner());
 	if (OwnerCharacter)
 	{
 		MovementComponent = OwnerCharacter->GetCharacterMovement();
 		if (MovementComponent)
 		{
-			// Save defaults so we can restore them when the grapple is released
+			// Save default values so we can restore them when the grapple is released
 			DefaultBrakingFrictionFactor = MovementComponent->BrakingFrictionFactor;
 			DefaultBrakingDeceleration = MovementComponent->BrakingDecelerationFalling;
 			DefaultAirControl = MovementComponent->AirControl;
@@ -45,7 +44,7 @@ void UGrappleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 		float DecayFactor = 0.995f;
 		HorizontalMomentum *= DecayFactor;
 
-		// Override horizontal velocity with our preserved momentum
+		// Override horizontal velocity with preserved momentum
 		Velocity.X = HorizontalMomentum.X;
 		Velocity.Y = HorizontalMomentum.Y;
 
@@ -61,7 +60,10 @@ void UGrappleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 
 void UGrappleComponent::AttachToSurface()
 {
-	if (!OwnerCharacter) return;
+	if (!OwnerCharacter)
+	{
+		return;
+	}
 
 	// Get the camera position and direction to fire the trace from
 	FVector Start;
@@ -98,25 +100,38 @@ void UGrappleComponent::ReleaseGrapple()
 	GrappleState = EGrappleState::Idle;
 	bIsReeling = false; // make sure reel state is cleared on release
 
-	if (!MovementComponent) return;
+	if (!MovementComponent)
+	{
+		return;
+	}
 
-	// Store horizontal velocity so Tick can preserve it briefly after release
+	// adding a small boost in the direction of travel for a satisfying launch feel
+	FVector LaunchBoost = MovementComponent->Velocity.GetSafeNormal() * HeroReleaseBoost;
+	MovementComponent->Velocity += LaunchBoost;
+
+	// Store horizontal velocity so Tick can preserve it briefly after the release
 	HorizontalMomentum = FVector(MovementComponent->Velocity.X, MovementComponent->Velocity.Y, 0.f);
 	bPreserveMomentum = true;
 
-	// Restore air control so the player can steer normally again
+	// Restore air control so the player can steer normally again (in air)
 	MovementComponent->AirControl = DefaultAirControl;
 	MovementComponent->SetMovementMode(MOVE_Falling);
 }
 
 void UGrappleComponent::UpdateSwing(float DeltaTime)
 {
-	if (!OwnerCharacter || !MovementComponent) return;
+	if (!OwnerCharacter || !MovementComponent)
+	{
+		return;
+	}
 
 	FVector PlayerLocation = OwnerCharacter->GetActorLocation();
 	FVector ToAnchor = GrapplePoint - PlayerLocation;
 	float CurrentDistance = ToAnchor.Size();
-	if (CurrentDistance <= 1.f) return;
+	if (CurrentDistance <= 1.f)
+	{
+		return;
+	}
 
 	FVector RopeDirection = ToAnchor / CurrentDistance;
 	FVector Velocity = MovementComponent->Velocity;
@@ -146,8 +161,8 @@ void UGrappleComponent::UpdateSwing(float DeltaTime)
 		Velocity += PullForce * DeltaTime;
 	}
 
-	// 4. Apply swing force along the tangent direction based on player forward input
-	//    This lets the player actively pump the swing to gain speed
+	// 4. Apply swing force along the  direction based on player forward input
+	//    This lets the player character actively pump the swing to gain speed
 	FVector PlayerForward = OwnerCharacter->GetActorForwardVector();
 	FVector TangentDirection = FVector::VectorPlaneProject(PlayerForward, RopeDirection).GetSafeNormal();
 	Velocity += TangentDirection * ForwardInputValue * SwingForce * DeltaTime;
@@ -159,11 +174,38 @@ void UGrappleComponent::UpdateSwing(float DeltaTime)
 }
 
 // These forward to internal functions so input bindings stay clean
-void UGrappleComponent::StartGrapple() { AttachToSurface(); }
-void UGrappleComponent::StopGrapple() { ReleaseGrapple(); }
+void UGrappleComponent::StartGrapple()
+{ 
+	AttachToSurface();
+}
 
-void UGrappleComponent::Input_StartGrapple() { StartGrapple(); }
-void UGrappleComponent::Input_StopGrapple() { StopGrapple(); }
-void UGrappleComponent::Input_StartReel() { bIsReeling = true; }
-void UGrappleComponent::Input_StopReel() { bIsReeling = false; }
-void UGrappleComponent::SetForwardInput(float Value) { ForwardInputValue = Value; }
+void UGrappleComponent::StopGrapple()
+{ 
+	ReleaseGrapple(); 
+}
+
+void UGrappleComponent::Input_StartGrapple() 
+{
+	StartGrapple();
+}
+
+void UGrappleComponent::Input_StopGrapple()
+{
+	StopGrapple();
+
+}
+
+void UGrappleComponent::Input_StartReel()
+{ 
+	bIsReeling = true; 
+}
+
+void UGrappleComponent::Input_StopReel() 
+{ 
+	bIsReeling = false; 
+}
+
+void UGrappleComponent::SetForwardInput(float Value)
+{ 
+	ForwardInputValue = Value;
+}
