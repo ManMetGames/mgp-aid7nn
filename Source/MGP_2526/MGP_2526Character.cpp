@@ -1,133 +1,153 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "MGP_2526Character.h"
-#include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
-#include "GameFramework/SpringArmComponent.h"
-#include "GameFramework/Controller.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "EnhancedInputComponent.h"
-#include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
-#include "MGP_2526.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Blueprint/UserWidget.h"
+#include "Materials/MaterialParameterCollectionInstance.h"
 
 AMGP_2526Character::AMGP_2526Character()
 {
-	// Set size for collision capsule
-	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
-		
-	// Don't rotate when the controller rotates. Let that just affect the camera.
-	bUseControllerRotationPitch = false;
-	bUseControllerRotationYaw = false;
-	bUseControllerRotationRoll = false;
+	// Set up collision capsule
+	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.f);
 
-	// Configure character movement
-	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
+	// First person mesh - only visible to the owning player
+	FirstPersonMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("First Person Mesh"));
+	FirstPersonMesh->SetupAttachment(GetMesh());
+	FirstPersonMesh->SetOnlyOwnerSee(true);
+	FirstPersonMesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+	FirstPersonMesh->SetCollisionProfileName(FName("NoCollision"));
 
-	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
-	// instead of recompiling to adjust them
-	GetCharacterMovement()->JumpZVelocity = 500.f;
-	GetCharacterMovement()->AirControl = 0.35f;
-	GetCharacterMovement()->MaxWalkSpeed = 500.f;
-	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
-	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
-	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
+	// Camera attached to the head socket of the first person mesh
+	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("First Person Camera"));
+	FirstPersonCameraComponent->SetupAttachment(FirstPersonMesh, FName("head"));
+	FirstPersonCameraComponent->SetRelativeLocationAndRotation(FVector(-2.8f, 5.89f, 0.f), FRotator(0.f, 90.f, -90.f));
+	FirstPersonCameraComponent->bUsePawnControlRotation = true;
 
-	// Create a camera boom (pulls in towards the player if there is a collision)
-	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 400.0f;
-	CameraBoom->bUsePawnControlRotation = true;
+	// Hide the third person mesh from the owning player
+	GetMesh()->SetOwnerNoSee(true);
+	GetCapsuleComponent()->SetCapsuleSize(34.f, 96.f);
 
-	// Create a follow camera
-	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
-	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-	FollowCamera->bUsePawnControlRotation = false;
+	// Default movement values
+	GetCharacterMovement()->BrakingDecelerationFalling = 1500.f;
+	GetCharacterMovement()->AirControl = 0.5f;
 
-	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
-	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+	// Create the grapple component
+	GrappleComponent = CreateDefaultSubobject<UGrappleComponent>(TEXT("GrappleComponent"));
+
+	// Enable tick so we can update the FOV and distortion every frame
+	PrimaryActorTick.bCanEverTick = true;
+}
+
+void AMGP_2526Character::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Only spawn the crosshair for the locally controlled player
+	if (IsLocallyControlled() && CrosshairWidgetClass)
+	{
+		UUserWidget* Crosshair = CreateWidget<UUserWidget>(GetWorld(), CrosshairWidgetClass);
+		if (Crosshair)
+		{
+			Crosshair->AddToViewport();
+		}
+	}
+
+	// Set the camera to the default FOV on start
+	if (FirstPersonCameraComponent)
+	{
+		FirstPersonCameraComponent->SetFieldOfView(DefaultFOV);
+	}
+}
+
+void AMGP_2526Character::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// Check if the grapple is currently attached
+	bool bIsGrappling = GrappleComponent && GrappleComponent->GrappleState == EGrappleState::Attached;
+
+	// Lerp the alpha toward 1 when grappling, back toward 0 when not
+	float TargetAlpha = bIsGrappling ? 1.f : 0.f;
+	GrappleEffectAlpha = FMath::FInterpTo(GrappleEffectAlpha, TargetAlpha, DeltaSeconds, GrappleFOVInterpSpeed);
+
+	// Apply the FOV lerp to the camera
+	if (FirstPersonCameraComponent)
+	{
+		float NewFOV = FMath::Lerp(DefaultFOV, GrappleFOV, GrappleEffectAlpha);
+		FirstPersonCameraComponent->SetFieldOfView(NewFOV);
+	}
+
+	// Push the alpha into the material parameter collection to drive the edge distortion
+	if (GrappleMPC)
+	{
+		UMaterialParameterCollectionInstance* MPCInstance = GetWorld()->GetParameterCollectionInstance(GrappleMPC);
+		if (MPCInstance)
+		{
+			// GrappleEffectAlpha drives the distortion intensity in the post process material
+			MPCInstance->SetScalarParameterValue(FName("GrappleEffectAlpha"), GrappleEffectAlpha);
+		}
+	}
 }
 
 void AMGP_2526Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	// Set up action bindings
-	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
-		
-		// Jumping
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
-
-		// Moving
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AMGP_2526Character::Move);
-		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AMGP_2526Character::Look);
-
-		// Looking
-		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMGP_2526Character::Look);
-	}
-	else
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		UE_LOG(LogMGP_2526, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
+		// Jump
+		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &AMGP_2526Character::DoJumpStart);
+		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &AMGP_2526Character::DoJumpEnd);
+
+		// Move and look
+		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AMGP_2526Character::MoveInput);
+		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMGP_2526Character::LookInput);
+		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AMGP_2526Character::LookInput);
+
+		// Grapple inputs bound directly to the component
+		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Started, GrappleComponent, &UGrappleComponent::Input_StartGrapple);
+		EnhancedInputComponent->BindAction(GrappleAction, ETriggerEvent::Completed, GrappleComponent, &UGrappleComponent::Input_StopGrapple);
+		EnhancedInputComponent->BindAction(ReelAction, ETriggerEvent::Started, GrappleComponent, &UGrappleComponent::Input_StartReel);
+		EnhancedInputComponent->BindAction(ReelAction, ETriggerEvent::Completed, GrappleComponent, &UGrappleComponent::Input_StopReel);
 	}
 }
 
-void AMGP_2526Character::Move(const FInputActionValue& Value)
+void AMGP_2526Character::MoveInput(const FInputActionValue& Value)
 {
-	// input is a Vector2D
 	FVector2D MovementVector = Value.Get<FVector2D>();
-
-	// route the input
 	DoMove(MovementVector.X, MovementVector.Y);
-}
 
-void AMGP_2526Character::Look(const FInputActionValue& Value)
-{
-	// input is a Vector2D
-	FVector2D LookAxisVector = Value.Get<FVector2D>();
-
-	// route the input
-	DoLook(LookAxisVector.X, LookAxisVector.Y);
-}
-
-void AMGP_2526Character::DoMove(float Right, float Forward)
-{
-	if (GetController() != nullptr)
+	// Pass forward input to the grapple component for swing force
+	if (GrappleComponent)
 	{
-		// find out which way is forward
-		const FRotator Rotation = GetController()->GetControlRotation();
-		const FRotator YawRotation(0, Rotation.Yaw, 0);
-
-		// get forward vector
-		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-
-		// get right vector 
-		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
-		// add movement 
-		AddMovementInput(ForwardDirection, Forward);
-		AddMovementInput(RightDirection, Right);
+		GrappleComponent->SetForwardInput(MovementVector.Y);
 	}
 }
 
-void AMGP_2526Character::DoLook(float Yaw, float Pitch)
+void AMGP_2526Character::LookInput(const FInputActionValue& Value)
 {
-	if (GetController() != nullptr)
+	FVector2D LookAxisVector = Value.Get<FVector2D>();
+	DoAim(LookAxisVector.X, LookAxisVector.Y);
+}
+
+void AMGP_2526Character::DoAim(float Yaw, float Pitch)
+{
+	if (GetController())
 	{
-		// add yaw and pitch input to controller
 		AddControllerYawInput(Yaw);
 		AddControllerPitchInput(Pitch);
 	}
 }
 
-void AMGP_2526Character::DoJumpStart()
+void AMGP_2526Character::DoMove(float Right, float Forward)
 {
-	// signal the character to jump
-	Jump();
+	if (GetController())
+	{
+		AddMovementInput(GetActorRightVector(), Right);
+		AddMovementInput(GetActorForwardVector(), Forward);
+	}
 }
 
-void AMGP_2526Character::DoJumpEnd()
-{
-	// signal the character to stop jumping
-	StopJumping();
-}
+void AMGP_2526Character::DoJumpStart() { Jump(); }
+void AMGP_2526Character::DoJumpEnd() { StopJumping(); }
