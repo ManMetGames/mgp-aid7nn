@@ -2,6 +2,8 @@
 # MGP_2526
  The assessment repo for 2526
 
+For this assessment, I have decided to attempt to make a Spider-Man like grapple mechanic.
+
 Movement Controls
 W - Forwards
 A - Left
