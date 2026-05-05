@@ -183,7 +183,6 @@ void UGrappleComponent::UpdateSwing(float DeltaTime)
 	// Draw the rope as a red line each frame for debugging
 	DrawDebugLine(GetWorld(), OwnerCharacter->GetActorLocation(), GrapplePoint, FColor::Red, false, 0.f, 0, 2.f);
 }
-
 // These forward to internal functions so input bindings stay clean
 void UGrappleComponent::StartGrapple()
 {
