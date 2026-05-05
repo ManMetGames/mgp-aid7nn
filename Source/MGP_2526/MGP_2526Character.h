@@ -3,6 +3,8 @@
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
 #include "GrappleComponent.h"
+#include "Materials/MaterialParameterCollection.h"
+#include "Materials/MaterialParameterCollectionInstance.h"
 #include "MGP_2526Character.generated.h"
 
 class UInputComponent;
@@ -62,6 +64,26 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<class UUserWidget> CrosshairWidgetClass;
 
+	// Default FOV when not grappling
+	UPROPERTY(EditAnywhere, Category = "Grapple|Feel")
+	float DefaultFOV = 90.f;
+
+	// FOV to lerp toward when grappling
+	UPROPERTY(EditAnywhere, Category = "Grapple|Feel")
+	float GrappleFOV = 110.f;
+
+	// How fast the FOV and distortion lerp in and out
+	UPROPERTY(EditAnywhere, Category = "Grapple|Feel")
+	float GrappleFOVInterpSpeed = 6.f;
+
+	// Material parameter collection that drives the edge distortion effect
+	UPROPERTY(EditAnywhere, Category = "Grapple|Feel")
+	UMaterialParameterCollection* GrappleMPC;
+
+private:
+	// Current lerp alpha for the grapple effects, 0 is default, 1 is full grapple
+	float GrappleEffectAlpha = 0.f;
+
 protected:
 	void MoveInput(const FInputActionValue& Value);
 	void LookInput(const FInputActionValue& Value);
@@ -79,11 +101,19 @@ protected:
 	virtual void DoJumpEnd();
 
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
 
 public:
-	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }
-	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
+	USkeletalMeshComponent* GetFirstPersonMesh() const
+	{
+		return FirstPersonMesh;
+	}
+
+	UCameraComponent* GetFirstPersonCameraComponent() const
+	{
+		return FirstPersonCameraComponent;
+	}
 };

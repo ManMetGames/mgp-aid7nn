@@ -6,6 +6,7 @@
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "Materials/MaterialParameterCollectionInstance.h"
 
 AMGP_2526Character::AMGP_2526Character()
 {
@@ -35,6 +36,9 @@ AMGP_2526Character::AMGP_2526Character()
 
 	// Create the grapple component
 	GrappleComponent = CreateDefaultSubobject<UGrappleComponent>(TEXT("GrappleComponent"));
+
+	// Enable tick so we can update the FOV and distortion every frame
+	PrimaryActorTick.bCanEverTick = true;
 }
 
 void AMGP_2526Character::BeginPlay()
@@ -48,6 +52,42 @@ void AMGP_2526Character::BeginPlay()
 		if (Crosshair)
 		{
 			Crosshair->AddToViewport();
+		}
+	}
+
+	// Set the camera to the default FOV on start
+	if (FirstPersonCameraComponent)
+	{
+		FirstPersonCameraComponent->SetFieldOfView(DefaultFOV);
+	}
+}
+
+void AMGP_2526Character::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// Check if the grapple is currently attached
+	bool bIsGrappling = GrappleComponent && GrappleComponent->GrappleState == EGrappleState::Attached;
+
+	// Lerp the alpha toward 1 when grappling, back toward 0 when not
+	float TargetAlpha = bIsGrappling ? 1.f : 0.f;
+	GrappleEffectAlpha = FMath::FInterpTo(GrappleEffectAlpha, TargetAlpha, DeltaSeconds, GrappleFOVInterpSpeed);
+
+	// Apply the FOV lerp to the camera
+	if (FirstPersonCameraComponent)
+	{
+		float NewFOV = FMath::Lerp(DefaultFOV, GrappleFOV, GrappleEffectAlpha);
+		FirstPersonCameraComponent->SetFieldOfView(NewFOV);
+	}
+
+	// Push the alpha into the material parameter collection to drive the edge distortion
+	if (GrappleMPC)
+	{
+		UMaterialParameterCollectionInstance* MPCInstance = GetWorld()->GetParameterCollectionInstance(GrappleMPC);
+		if (MPCInstance)
+		{
+			// GrappleEffectAlpha drives the distortion intensity in the post process material
+			MPCInstance->SetScalarParameterValue(FName("GrappleEffectAlpha"), GrappleEffectAlpha);
 		}
 	}
 }

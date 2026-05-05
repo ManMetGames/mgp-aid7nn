@@ -6,7 +6,7 @@
 class ACharacter;
 class UCharacterMovementComponent;
 
-// Tracks whether the grapple is  hooked onto something
+// Tracks whether the grapple is hooked onto something
 UENUM(BlueprintType)
 enum class EGrappleState : uint8
 {
@@ -18,6 +18,7 @@ UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class MGP_2526_API UGrappleComponent : public UActorComponent
 {
 	GENERATED_BODY()
+
 public:
 	UGrappleComponent();
 
@@ -30,16 +31,13 @@ private:
 	ACharacter* OwnerCharacter;
 	UCharacterMovementComponent* MovementComponent;
 
-	// Current state of the grapple
-	EGrappleState GrappleState = EGrappleState::Idle;
-
 	//World position of the grapple hook point
 	FVector GrapplePoint;
+
 	// Current rope length, set when the grapple first attaches
 	float RopeLength = 0.f;
 
-
-	//EDIT ANYWHERE properties to tweak grapple feel without changing code! ! !!!!!! 
+	//EDIT ANYWHERE properties to tweak grapple feel without changing code! ! !!!!!!
 	// How far the grapple hook can reach
 	UPROPERTY(EditAnywhere, Category = "Grapple")
 	float MaxGrappleDistance = 3000.f;
@@ -83,6 +81,9 @@ private:
 	bool bPreserveMomentum = false;
 
 public:
+	// Exposed so the character can read it for the FOV and distortion effects
+	EGrappleState GrappleState = EGrappleState::Idle;
+
 	// Input entry points called from the character
 	void Input_StartGrapple();
 	void Input_StopGrapple();

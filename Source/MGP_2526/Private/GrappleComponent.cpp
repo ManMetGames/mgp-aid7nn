@@ -38,15 +38,24 @@ void UGrappleComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 	}
 	else if (bPreserveMomentum && MovementComponent)
 	{
+		// Cancel momentum preservation as soon as the player lands
+		// so it doesn't fight the ground movement
+		if (MovementComponent->IsMovingOnGround())
+		{
+			bPreserveMomentum = false;
+			return;
+		}
+
 		FVector Velocity = MovementComponent->Velocity;
 
 		// Gradually decay horizontal momentum each frame
 		float DecayFactor = 0.995f;
 		HorizontalMomentum *= DecayFactor;
 
-		// Override horizontal velocity with preserved momentum
-		Velocity.X = HorizontalMomentum.X;
-		Velocity.Y = HorizontalMomentum.Y;
+		// Blend preserved momentum with actual velocity so player input
+		// can still influence direction while momentum carries them forward
+		Velocity.X = FMath::FInterpTo(Velocity.X, HorizontalMomentum.X, DeltaTime, 3.f);
+		Velocity.Y = FMath::FInterpTo(Velocity.Y, HorizontalMomentum.Y, DeltaTime, 3.f);
 
 		MovementComponent->Velocity = Velocity;
 
@@ -113,8 +122,10 @@ void UGrappleComponent::ReleaseGrapple()
 	HorizontalMomentum = FVector(MovementComponent->Velocity.X, MovementComponent->Velocity.Y, 0.f);
 	bPreserveMomentum = true;
 
-	// Restore air control so the player can steer normally again (in air)
+	// Restore all movement defaults so the player can steer normally again
 	MovementComponent->AirControl = DefaultAirControl;
+	MovementComponent->BrakingFrictionFactor = DefaultBrakingFrictionFactor;
+	MovementComponent->BrakingDecelerationFalling = DefaultBrakingDeceleration;
 	MovementComponent->SetMovementMode(MOVE_Falling);
 }
 
@@ -161,7 +172,7 @@ void UGrappleComponent::UpdateSwing(float DeltaTime)
 		Velocity += PullForce * DeltaTime;
 	}
 
-	// 4. Apply swing force along the  direction based on player forward input
+	// 4. Apply swing force along the direction based on player forward input
 	//    This lets the player character actively pump the swing to gain speed
 	FVector PlayerForward = OwnerCharacter->GetActorForwardVector();
 	FVector TangentDirection = FVector::VectorPlaneProject(PlayerForward, RopeDirection).GetSafeNormal();
@@ -175,16 +186,16 @@ void UGrappleComponent::UpdateSwing(float DeltaTime)
 
 // These forward to internal functions so input bindings stay clean
 void UGrappleComponent::StartGrapple()
-{ 
+{
 	AttachToSurface();
 }
 
 void UGrappleComponent::StopGrapple()
-{ 
-	ReleaseGrapple(); 
+{
+	ReleaseGrapple();
 }
 
-void UGrappleComponent::Input_StartGrapple() 
+void UGrappleComponent::Input_StartGrapple()
 {
 	StartGrapple();
 }
@@ -192,20 +203,19 @@ void UGrappleComponent::Input_StartGrapple()
 void UGrappleComponent::Input_StopGrapple()
 {
 	StopGrapple();
-
 }
 
 void UGrappleComponent::Input_StartReel()
-{ 
-	bIsReeling = true; 
+{
+	bIsReeling = true;
 }
 
-void UGrappleComponent::Input_StopReel() 
-{ 
-	bIsReeling = false; 
+void UGrappleComponent::Input_StopReel()
+{
+	bIsReeling = false;
 }
 
 void UGrappleComponent::SetForwardInput(float Value)
-{ 
+{
 	ForwardInputValue = Value;
 }
